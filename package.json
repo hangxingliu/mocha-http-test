@@ -1,0 +1,26 @@
+{
+  "name": "mocha-http-test",
+  "version": "0.0.1",
+  "description": "a http test tools for mocha",
+  "main": "mocha-http-test.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "test",
+    "mocha",
+    "http"
+  ],
+  "author": "LiuYue",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "mocha": "*"
+  },
+  "dependencies": {
+    "request": "*"
+  }
+
+}
