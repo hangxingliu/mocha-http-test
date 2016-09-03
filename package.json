@@ -1,6 +1,6 @@
 {
   "name": "mocha-http-test",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "a http test tools for mocha",
   "main": "mocha-http-test.js",
   "directories": {

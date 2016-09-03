@@ -1,37 +1,3 @@
-/**
- * 版本:
- * 0.0.1
- * 
- * 测试前说明:
- * 1. 请基于mochajs测试
- * 2. 直接放入describe内测试即可
- *
- * 使用方法:
- *
- * httpTest = new HTTPTest();
- * httpTest.baseUrl = 'baseUrl';
- * httpTest.test(TEST_NAME, METHOD_URL, CHECKER)
- * httpTest.test(TEST_NAME, METHOD_URL, HEADER, BODY, CHECKER)
- * httpTest.addChecker('name', function(err, res, body) {
- *		return {error: 'Error Message'};
- * 		return true;//It is ok
- * }, isDefault = false)
- * httpTest.addHeaderSet('name', Object, isDefault = false);
- * httpTest.packMutlipartBody(Object);
- *
- * METHOD_URL: 'METHOD URL';
- * HEADER: 'HEADRER1|HEADER2|...',
- *			[HEADERString/Object, ...],
- *			Object
- * BODY: 	String //As Body String
- *			Object //As application/x-www-form-urlencoded String
- *			Object insteadof httpTest.MultipartBody
- * CHECKER: 'Checker1|Checker2|...'
- *			[CheckerString/CheckerFunction]
- *			CheckerFunction
- * The Varible like CHECKER OR HEADER PARAM BE NAMED "MultiPartParam"
- */
-
 var request = require('request');
 var Assert = require('assert');
 
@@ -47,11 +13,73 @@ var httpTest = function(){
 		checkers = {},
 		baseUrl = void 0;
 
+	//Array<params: {
+	//	methodURL: string(cover), header: any(extend), body: any(cover), checker: any(extend)
+	//}>
+	var placeholder = [];
+
+	this.createTestPlaceholder = function (testName, methodURL, header, body, checker) {
+		if (arguments.length == 3) {
+			checker = header;
+			header = '';
+		}
+
+		var placeholderId = placeholder.push({
+			methodURL: methodURL,
+			header: header,
+			body: body,
+			checker: checker
+		}) - 1;
+
+		var context = placeholder[placeholderId];
+		
+		return it(testName, function (done) {
+			if (!context.requestOpts)
+				return Assert(!1, Message.PLACEHOLDER_ERROR), done();
+			request(context.requestOpts, function (err, res, bd) {
+				return pipeHTTPResult2Chcker(err, res, bd, context.checker), done();
+			});
+		}), placeholderId;
+	}
+
+	this.solveTestPlaceholder = function (placeholderId, methodURL, header, body, checker) {
+		if (arguments.length < 4) {
+			checker = header;
+			header = '';
+		}
+		
+		var context = placeholder[placeholderId];
+		if (!context) return !1;
+
+		var requestHeaders = extend(true, {}, defaultHeaders);
+		var requestOpts = analyzeMethodURL2RequestObj(methodURL || context.methodURL);
+		//methodURL 出错
+		if (!requestOpts)
+			return Assert(!1, Message.METHOD_URL_ERROR);
+
+		//处理Header
+		var addHeaders1 = context.header ? analyzeMultiPartParam(context.header, headers) : [];
+		var addHeaders2 = header ? analyzeMultiPartParam(header, headers) : [];
+		extend.apply(null, [true, requestHeaders].concat(addHeaders1).concat(addHeaders2) );
+
+		
+		//处理Checker		
+		var _checkers1 = context.checker ? analyzeMultiPartParam(context.checker, checkers) : [];
+		var _checkers2 = checker ? analyzeMultiPartParam(checker, checkers) : [];
+		context.checker = _checkers1.concat(_checkers2);
+
+		//处理BODY
+		addBodyParam2RequestObj(body || context.body, requestOpts);
+
+		requestOpts.headers = requestHeaders;
+
+		context.requestOpts = requestOpts;
+	}
+
 	this.test = function (testName, methodURL, header, body, checker) {
 		if (arguments.length < 5) {
 			checker = header;
 			header = '';
-			body = void 0;
 		}
 		
 		var requestHeaders = extend(true, {}, defaultHeaders);
@@ -70,33 +98,12 @@ var httpTest = function(){
 		var requestCheckers = checker ? analyzeMultiPartParam(checker, checkers) : [];
 
 		//处理BODY
-		if (body) {
-			if (typeof body == 'string') {
-				requestOpts.body = body;
-			} else if (body instanceof MultipartBodyPackage) {
-				requestOpts.formDara = body.get();
-			} else {
-				requestOpts.form = body;
-			}
-		}
+		addBodyParam2RequestObj(body, requestOpts);
 
 		requestOpts.headers = requestHeaders;
-		return it(testName, function (done) {
-			request(requestOpts, function (err, res, bd) {
-				if (err) {
-					Assert(!1, Message.format(Message.REQUEST_ERROR, err));
-					return done();
-				}
-				var _checkers = defaultCheckers.concat(requestCheckers);
-				var checkerReturn;
-				for(var i in _checkers) {
-					checkerReturn = _checkers[i](err, res, bd);
-					if (typeof checkerReturn == 'object') {
-						return Assert(!1, Message.format(Message.CHECKER_ERROR, checkerReturn.error)),
-							done();
-					}
-				}
-				done();
+		return it(testName, (done) => {
+			request(requestOpts, (err, res, bd) => {
+				return pipeHTTPResult2Chcker(err, res, bd, requestCheckers), done();
 			});
 		});
 		
@@ -120,6 +127,30 @@ var httpTest = function(){
 
 	this.reflection = function (name) { return eval(name);}
 	
+	function pipeHTTPResult2Chcker(err, res, bd, checkers) {
+		if (err)
+			return Assert(!1, Message.format(Message.REQUEST_ERROR, err));
+		var _checkers = defaultCheckers.concat(checkers),
+			checkerReturn;
+		for(var i in _checkers) {
+			checkerReturn = _checkers[i](err, res, bd);
+			if (typeof checkerReturn == 'object')
+				return Assert(!1, Message.format(Message.CHECKER_ERROR, checkerReturn.error));
+		}
+	}
+
+	function addBodyParam2RequestObj(body, requestObj) {
+		if (body) {
+			if (typeof body == 'string') {
+				requestObj.body = body;
+			} else if (body instanceof MultipartBodyPackage) {
+				requestObj.formDara = body.get();
+			} else {
+				requestObj.form = body;
+			}
+		}
+	}
+
 	function analyzeMethodURL2RequestObj(methodURL) {
 		var parts = methodURL.match(/^(GET|POST|DELETE|PUT|HEAD|OPTION)\s+(.+)$/);
 		if (!parts)

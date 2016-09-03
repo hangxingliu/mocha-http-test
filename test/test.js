@@ -120,6 +120,15 @@ describe('MochaHttpTest', () => {
 			http.test('Request Test: POST data', 'POST /upload', 'ua', {filename: 'helloworld'}, '');
 		});
 
+		describe('#testPlaceholder', () => {
+			var placeholderId = 0;
+			http.test('Request Test Placeholder: request1', 'GET /json/key', function (err, res, body) {
+				http.solveTestPlaceholder(placeholderId, '', '', { key: JSON.parse(body).key });
+			});
+			placeholderId = http.createTestPlaceholder('Request Test Placeholder: request2(need input from request1 output)',
+				'POST /');
+		});
+
 		describe.skip('#test(error request)', () => {
 			//TODO write wrong request unit test(I dont have any good idea to write it)
 			http.test('Request Test: json', 'GET /', '', void 0 ,'json');
@@ -143,6 +152,8 @@ function createLocalTestServer() {
 		var body = '';
 		if (req.url.startsWith('/json') )
 			newHead['content-type'] = 'application/json';
+		if (req.url == '/json/key')
+			body = '{"key": 123}';
 		if (req.url == '/json/message')
 			body = '{"message": "test"}';
 		if (req.url == '/ua')
@@ -150,8 +161,10 @@ function createLocalTestServer() {
 				statusCode = 403;
 		if (req.method == 'POST')
 			return req.on('data', function (data) {
-				if (data.toString('utf8') == 'filename=helloworld')
-					return res.writeHead(statusCode, newHead), res.write(body), res.end();	
+				var data = data.toString('utf8');
+				if (data == 'filename=helloworld' || data == 'key=123')
+					return res.writeHead(statusCode, newHead), res.write(body), res.end();
+				return res.writeHead(404, {}), res.end();
 			});
 		
 
